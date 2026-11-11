@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ruleta PM">
+<meta name="theme-color" content="#070B1A">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Ruleta del PM 2030</title>
+<link rel="stylesheet" href="fonts.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>
+/* Layout: kiosco de una sola pantalla para iPad. Ruleta dominante a la izquierda + mensaje y botón a la derecha; en vertical se apila título / ruleta / botón. Look oscuro único (pantalla de stand), elegido a propósito. */
+:root{
+  --ink:#070B1A;        /* fondo */
+  --panel:#0E1530;      /* superficies */
+  --line:#24305C;       /* bordes */
+  --fg:#EEF2FF;         /* texto */
+  --muted:#9AA6CF;      /* texto secundario */
+  --cyan:#3FD0FF;       /* acento IA */
+  --blue:#2463EB;
+  --gold:#F2B33D;       /* premio */
+  --display:"Sora",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--ink);color:var(--fg);font-family:var(--body);
+  overflow:hidden;touch-action:manipulation;-webkit-user-select:none;user-select:none;
+  -webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;
+}
+.app{
+  position:relative;height:100%;
+  display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);grid-template-rows:1fr auto;
+  grid-template-areas:"wheel head" "wheel action";
+  column-gap:clamp(20px,4vw,64px);row-gap:clamp(14px,2.4vh,28px);
+  padding-block:clamp(16px,3vh,40px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:
+    radial-gradient(60% 70% at 25% 50%, rgba(63,208,255,.13), transparent 70%),
+    radial-gradient(50% 60% at 100% 0%, rgba(36,99,235,.18), transparent 70%),
+    var(--ink);
+}
+.app::before{ /* retícula sutil tipo plano de proyecto */
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.35;
+  background-image:linear-gradient(rgba(63,208,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(63,208,255,.07) 1px,transparent 1px);
+  background-size:44px 44px;
+  -webkit-mask-image:radial-gradient(80% 80% at 50% 50%,#000 30%,transparent 100%);mask-image:radial-gradient(80% 80% at 50% 50%,#000 30%,transparent 100%);
+}
+.stage{
+  grid-area:wheel;position:relative;justify-self:center;align-self:center;
+  width:min(100%,86vh);max-width:100%;aspect-ratio:1;
+}
+#wheel{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 24px 60px rgba(0,0,0,.55)) drop-shadow(0 0 40px rgba(63,208,255,.15))}
+.pointer{
+  position:absolute;top:-1.5%;left:50%;width:8.5%;aspect-ratio:.82;z-index:2;
+  translate:-50% 0;rotate:0deg;transform-origin:50% 18%;transition:rotate .09s ease-out;
+  background:linear-gradient(180deg,#fff,#cfe9ff);clip-path:polygon(0 0,100% 0,50% 100%);
+  filter:drop-shadow(0 4px 6px rgba(0,0,0,.5));
+}
+.pointer.kick{rotate:-22deg;transition:none}
+.hub{
+  position:absolute;inset:0;margin:auto;width:23%;height:23%;z-index:2;border-radius:50%;
+  display:grid;place-content:center;gap:2px;text-align:center;cursor:pointer;
+  font-family:var(--display);font-weight:800;color:var(--fg);letter-spacing:.06em;
+  font-size:clamp(14px,2.1vw,26px);line-height:1;
+  background:radial-gradient(circle at 35% 30%,#1b2a5e,var(--ink) 75%);
+  border:clamp(3px,.5vw,6px) solid var(--cyan);
+  box-shadow:0 0 0 6px rgba(7,11,26,.8),0 0 36px rgba(63,208,255,.55),inset 0 0 22px rgba(63,208,255,.25);
+  transition:transform .15s ease;
+}
+.hub small{font-family:var(--body);font-weight:600;font-size:.42em;letter-spacing:.2em;color:var(--muted)}
+.hub:active{transform:scale(.95)}
+.hub:disabled{cursor:default;opacity:.85}
+.hub:focus-visible,.cta:focus-visible,.btn:focus-visible{outline:3px solid var(--gold);outline-offset:4px}
+
+.head{grid-area:head;align-self:end;display:flex;flex-direction:column;gap:clamp(12px,2.2vh,24px);min-width:0;max-width:600px}
+.brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{
+  font-family:var(--display);font-weight:800;letter-spacing:.14em;font-size:clamp(14px,1.5vw,18px);
+  padding:8px 12px;border:2px solid var(--cyan);border-radius:8px;color:var(--fg);background:rgba(63,208,255,.08);cursor:default;
+}
+.eyebrow{font-size:clamp(12px,1.2vw,14px);font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+h1{
+  margin:0;font-family:var(--display);font-weight:800;line-height:.98;letter-spacing:-.025em;text-wrap:balance;
+  font-size:clamp(38px,5.6vw,76px);
+}
+h1 span{color:var(--cyan);display:inline-block}
+.thesis{margin:0;font-family:var(--display);font-size:clamp(18px,2.1vw,28px);line-height:1.25;font-weight:600}
+.thesis .a{color:var(--muted);font-weight:400;display:block}
+.steps{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;list-style:none}
+.step{display:flex;gap:14px;align-items:flex-start;background:rgba(14,21,48,.75);border:1px solid var(--line);border-radius:16px;padding:14px 16px;min-width:0}
+.num{
+  flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  font-family:var(--display);font-weight:800;color:var(--ink);background:var(--cyan);font-size:16px;
+}
+.step b{display:block;font-size:clamp(16px,1.6vw,19px);margin-bottom:3px}
+.step p{margin:0;color:var(--muted);font-size:clamp(14px,1.35vw,16px);line-height:1.4}
+.step-body{flex:1;min-width:0}
+.qr{flex:none;width:96px;height:96px;padding:6px;background:#fff;border-radius:10px}
+.qr img,.qr canvas{width:100%!important;height:100%!important;display:block}
+
+.action{grid-area:action;align-self:start;display:flex;flex-direction:column;gap:10px;max-width:600px;min-width:0}
+.cta{
+  appearance:none;border:0;cursor:pointer;width:100%;
+  font-family:var(--display);font-weight:800;font-size:clamp(20px,2.4vw,30px);letter-spacing:.01em;
+  color:var(--ink);padding:clamp(18px,2.6vh,26px) 28px;border-radius:999px;
+  background:linear-gradient(100deg,var(--cyan),#7FE3FF 45%,var(--cyan));background-size:200% 100%;
+  box-shadow:0 12px 40px rgba(63,208,255,.35);animation:shine 3.2s linear infinite;
+  transition:transform .12s ease,opacity .2s;
+}
+.cta:active{transform:scale(.98)}
+.cta:disabled{opacity:.45;animation:none;cursor:default}
+@keyframes shine{to{background-position:-200% 0}}
+.hint{margin:0;text-align:center;color:var(--muted);font-size:14px}
+
+/* Resultado */
+.overlay{
+  position:fixed;inset:0;z-index:20;display:grid;place-items:center;
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:rgba(4,7,18,.74);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+}
+.card{
+  --seg:var(--cyan);
+  position:relative;width:min(660px,100%);max-height:100%;overflow:auto;
+  background:linear-gradient(180deg,rgba(255,255,255,.04),transparent 40%),var(--panel);
+  border:1px solid var(--line);border-top:10px solid var(--seg);border-radius:28px;
+  padding:clamp(24px,4vw,44px);text-align:center;display:flex;flex-direction:column;align-items:center;gap:clamp(10px,1.8vh,18px);
+  box-shadow:0 40px 120px rgba(0,0,0,.6),0 0 80px color-mix(in srgb,var(--seg) 35%,transparent);
+  animation:pop .5s cubic-bezier(.2,1.4,.4,1) both;
+}
+@keyframes pop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
+.r-emoji{font-size:clamp(64px,10vw,112px);line-height:1}
+.r-eyebrow{font-size:13px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.r-name{margin:0;font-family:var(--display);font-weight:800;font-size:clamp(30px,4.6vw,54px);line-height:1.02;letter-spacing:-.02em;text-wrap:balance}
+.r-desc{margin:0;font-size:clamp(17px,1.9vw,21px);line-height:1.45;color:#C9D2F2;max-width:52ch;text-wrap:pretty}
+.reward{width:100%;border-radius:18px;padding:16px 18px;border:2px dashed var(--line);display:flex;flex-direction:column;gap:6px}
+.reward .lbl{font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--cyan)}
+.reward .txt{font-size:clamp(17px,1.9vw,22px);font-weight:600;line-height:1.35}
+.card.prize .reward{border:2px solid var(--gold);background:rgba(242,179,61,.12)}
+.card.prize .reward .lbl{color:var(--gold)}
+.tag{margin:0;font-family:var(--display);font-size:15px;color:var(--muted)}
+.tag b{color:var(--fg)}
+.btn{
+  appearance:none;cursor:pointer;border-radius:999px;font-family:var(--display);font-weight:700;
+  font-size:clamp(17px,1.8vw,21px);padding:16px 28px;border:2px solid var(--cyan);background:transparent;color:var(--fg);
+}
+.btn.solid{background:var(--cyan);color:var(--ink)}
+.btn.small{font-size:14px;padding:10px 16px}
+.btn.warn{border-color:#F26D6D;color:#FFB3B3}
+
+/* Panel de staff */
+.sheet{position:fixed;inset:0;z-index:40;background:rgba(4,7,18,.86);overflow:auto;
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-user-select:text;user-select:text}
+.sheet-card{max-width:1100px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:clamp(16px,3vw,32px);display:flex;flex-direction:column;gap:18px}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.sheet h2{margin:0;font-family:var(--display);font-size:24px}
+.kpis{display:flex;gap:12px;flex-wrap:wrap}
+.kpi{background:var(--ink);border:1px solid var(--line);border-radius:14px;padding:10px 14px;min-width:120px}
+.kpi b{display:block;font-family:var(--display);font-size:26px;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);min-width:0}
+.sheet input,.sheet textarea{
+  font:inherit;font-size:15px;color:var(--fg);background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%;min-width:0
+}
+.sheet textarea{resize:vertical;min-height:58px}
+.sheet input[type=checkbox]{width:24px;height:24px;accent-color:var(--gold)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;min-width:860px;font-size:14px}
+th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;background:rgba(0,0,0,.2)}
+td.num-c{font-variant-numeric:tabular-nums;white-space:nowrap}
+td input.w{width:72px}
+td input.s{width:84px}
+.sheet-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.note{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
+
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30}
+
+@media (orientation:portrait),(max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"head" "wheel" "action";justify-items:center}
+  .head{align-self:start;align-items:center;text-align:center;max-width:720px}
+  .brand{justify-content:center}
+  .steps{flex-direction:row;width:100%}
+  .step{flex:1;text-align:left}
+  .stage{width:min(100%,48vh)}
+  .action{width:min(100%,560px)}
+}
+@media (orientation:portrait) and (max-height:900px){ .qr{display:none} }
+@media (max-width:600px){
+  body{overflow:auto}
+  .app{height:auto;min-height:100%}
+  .steps{flex-direction:column}
+  .stage{width:100%}
+}
+@media (prefers-reduced-motion:reduce){ .cta{animation:none} .card{animation:none} }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <div class="stage" id="stage">
+    <canvas id="wheel" aria-label="Ruleta con 8 perfiles del Project Manager del futuro" role="img"></canvas>
+    <div class="pointer" id="pointer" aria-hidden="true"></div>
+    <button class="hub" id="hub" type="button" aria-label="Girar la ruleta">GIRAR<small>HLS</small></button>
+  </div>
+
+  <header class="head">
+    <div class="brand">
+      <div class="logo" id="logo" aria-label="HLS Group">HLS GROUP</div>
+      <span class="eyebrow">PM Tour 2026</span>
+    </div>
+    <h1>Ruleta del <span>PM 2030</span></h1>
+    <p class="thesis"><span class="a">La IA ejecuta.</span>El Project Manager responde.</p>
+    <ol class="steps">
+      <li class="step">
+        <span class="num">1</span>
+        <div class="step-body">
+          <b>Sigue a HLS Group</b>
+          <p id="handles"></p>
+        </div>
+        <div class="qr" id="qr" hidden></div>
+      </li>
+      <li class="step">
+        <span class="num">2</span>
+        <div class="step-body">
+          <b>Gira y descubre tu perfil</b>
+          <p>¿Qué Project Manager serás en la era de la IA? Algunos perfiles ganan premio al instante.</p>
+        </div>
+      </li>
+    </ol>
+  </header>
+
+  <div class="action">
+    <button class="cta" id="cta" type="button">Ya sigo a HLS · ¡Girar!</button>
+    <p class="hint">Muestra al staff que ya sigues a HLS Group y gira.</p>
+  </div>
+</div>
+
+<div class="overlay" id="result" hidden>
+  <div class="card" id="card" role="dialog" aria-modal="true" aria-labelledby="rName">
+    <div class="r-emoji" id="rEmoji"></div>
+    <div class="r-eyebrow">Tu perfil de Project Manager</div>
+    <h2 class="r-name" id="rName"></h2>
+    <p class="r-desc" id="rDesc"></p>
+    <div class="reward">
+      <span class="lbl" id="rLbl"></span>
+      <span class="txt" id="rTxt"></span>
+    </div>
+    <p class="tag">La IA ejecuta. <b>El Project Manager responde.</b></p>
+    <button class="btn solid" id="next" type="button">Siguiente participante</button>
+  </div>
+</div>
+
+<div class="sheet" id="admin" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2>Configuración del stand</h2>
+      <button class="btn small" id="aClose" type="button">Cerrar</button>
+    </div>
+    <div class="kpis" id="aKpis"></div>
+    <div class="fields">
+      <label class="field">Texto de redes (paso 1)
+        <textarea id="aHandles"></textarea>
+      </label>
+      <label class="field">Enlace para el código QR (vacío = sin QR)
+        <input id="aQr" type="url" placeholder="https://www.linkedin.com/company/...">
+      </label>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Perfil</th><th>Peso</th><th>Prob.</th><th>Premio</th><th>Inventario</th><th>Texto del resultado (reto o premio)</th><th>Salió</th><th>Premios</th></tr></thead>
+        <tbody id="aRows"></tbody>
+      </table>
+    </div>
+    <p class="note">Peso: entre más alto, más probable. Peso 0 = nunca sale. Marca «Premio» para los perfiles que entregan obsequio inmediato. Inventario vacío = ilimitado; cuando un premio llega a 0, ese perfil deja de salir. Todo se guarda solo en este iPad.</p>
+    <div class="sheet-actions">
+      <label class="field" style="flex-direction:row;align-items:center;gap:8px;margin-right:auto"><input type="checkbox" id="aSound"> Sonido</label>
+      <button class="btn small warn" id="aResetStats" type="button">Reiniciar contadores</button>
+      <button class="btn small warn" id="aDefaults" type="button">Restaurar valores originales</button>
+      <button class="btn small solid" id="aDone" type="button">Listo</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="confetti" aria-hidden="true"></canvas>
+
+<script src="qrcode.min.js"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const TAU = Math.PI * 2;
+  const KEY = "ruletaPM2030.v1";
+
+  const BASE = [
+    { id:"vis", emoji:"🧠", name:"Visionario de Negocio", lines:["Visionario","de Negocio"], color:"#2463EB",
+      desc:"La IA te da escenarios en segundos. Tú decides cuál crea valor para el negocio y respondes por esa decisión.",
+      reward:"Reto: dinos en una frase qué decisión nunca le dejarías a la IA.", prize:false, weight:14, stock:"" },
+    { id:"arq", emoji:"⚡", name:"Arquitecto de Cambio", lines:["Arquitecto","de Cambio"], color:"#0F9F9A",
+      desc:"La IA automatiza procesos. Tú diseñas cómo las personas adoptan lo nuevo sin perder el rumbo.",
+      reward:"Reto: tómate una foto en el stand y publícala etiquetando a HLS Group con #PMTour2026.", prize:false, weight:14, stock:"" },
+    { id:"lid", emoji:"🤝", name:"Líder de Servicio", lines:["Líder","de Servicio"], color:"#5B4BDB",
+      desc:"La IA atiende tareas. Tú atiendes personas: equipo, cliente y patrocinador confían en ti.",
+      reward:"Reto: comparte con el staff tu mejor consejo para liderar equipos que trabajan con IA.", prize:false, weight:14, stock:"" },
+    { id:"pm", emoji:"🚀", name:"PM del 2030", lines:["PM del","2030"], color:"#E2475E",
+      desc:"Orquestas personas, datos y agentes de IA en un mismo plan. La IA ejecuta; tú respondes por el resultado.",
+      reward:"¡Premio instantáneo! Reclama tu obsequio HLS con el staff.", prize:true, weight:10, stock:"" },
+    { id:"aud", emoji:"🔍", name:"Auditor de IA", lines:["Auditor","de IA"], color:"#1E88C8",
+      desc:"Nada llega al cliente sin tu revisión. Validas lo que produce la IA: datos, supuestos y riesgos.",
+      reward:"Reto: menciona un riesgo de usar IA en proyectos y cómo lo controlarías.", prize:false, weight:14, stock:"" },
+    { id:"gob", emoji:"🛡️", name:"Gobernador de IA", lines:["Gobernador","de IA"], color:"#3B3FA8",
+      desc:"Defines las reglas del juego: ética, seguridad y responsabilidad sobre cada decisión que toma la IA.",
+      reward:"Reto: comparte tu perfil en tus historias etiquetando a HLS Group.", prize:false, weight:14, stock:"" },
+    { id:"est", emoji:"📈", name:"Estratega de Transformación", lines:["Estratega de","Transformación"], color:"#12A87A",
+      desc:"Conviertes la tecnología en una hoja de ruta con objetivos, métricas y beneficios medibles.",
+      reward:"Reto: cuéntanos qué proyecto de tu empresa transformarías con IA.", prize:false, weight:14, stock:"" },
+    { id:"yeti", emoji:"🎁", name:"Gestor Aumentado con IA", lines:["Gestor","Aumentado","con IA"], color:"#F2B33D", text:"#1A1300",
+      desc:"Usas la IA como copiloto para planear, estimar y reportar más rápido, sin soltar el control del proyecto.",
+      reward:"¡Ganaste un YETI! Reclámalo con el staff de HLS Group.", prize:true, weight:4, stock:"5" },
+  ];
+  const EDITABLE = ["weight","prize","reward","stock"];
+  const DEF_HANDLES = "Busca «HLS Group» en LinkedIn, Instagram y Facebook y dale seguir.";
+
+  let segs, cfg, stats;
+  function fresh(){
+    segs = BASE.map(s => ({...s}));
+    cfg = { handles: DEF_HANDLES, qr: "", sound: true };
+  }
+  function load(){
+    fresh(); stats = { spins:0, wins:{}, prizes:{} };
+    try {
+      const d = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (!d) return;
+      if (d.cfg) cfg = {...cfg, ...d.cfg};
+      if (d.segs) segs.forEach(s => { const o = d.segs.find(x => x.id === s.id); if (o) EDITABLE.forEach(k => { if (k in o) s[k] = o[k]; }); });
+      if (d.stats) stats = { spins:d.stats.spins||0, wins:d.stats.wins||{}, prizes:d.stats.prizes||{} };
+    } catch (e) {}
+  }
+  function save(){
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        cfg, stats, segs: segs.map(s => { const o = {id:s.id}; EDITABLE.forEach(k => o[k] = s[k]); return o; })
+      }));
+    } catch (e) {}
+  }
+  load();
+
+  const N = segs.length, SEG = TAU / N;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- texto de redes + QR ---------- */
+  function renderInfo(){
+    $("#handles").textContent = cfg.handles;
+    const box = $("#qr"); box.innerHTML = "";
+    if (cfg.qr && window.QRCode) {
+      try { new QRCode(box, { text: cfg.qr, width: 168, height: 168, colorDark:"#070B1A", colorLight:"#ffffff", correctLevel: QRCode.CorrectLevel.M }); box.hidden = false; }
+      catch (e) { box.hidden = true; }
+    } else box.hidden = true;
+  }
+  renderInfo();
+
+  /* ---------- audio ---------- */
+  let ac;
+  function audioOn(){
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (ac && ac.state === "suspended") ac.resume();
+  }
+  function tone(f, d, type, v, when){
+    if (!ac || !cfg.sound) return;
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + (when || 0);
+    o.type = type || "square"; o.frequency.value = f;
+    g.gain.setValueAtTime(v || .05, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + .03);
+  }
+  const tick = () => tone(1500, .035, "square", .035);
+  const winSound = big => (big ? [523,659,784,1047,1319] : [523,659,784,1047]).forEach((f,i) => tone(f, .32, "triangle", .09, i * .11));
+
+  /* ---------- wake lock ---------- */
+  let lock = null;
+  async function keepAwake(){ try { if ("wakeLock" in navigator && !lock) { lock = await navigator.wakeLock.request("screen"); lock.addEventListener("release", () => lock = null); } } catch (e) {} }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") keepAwake(); });
+
+  /* ---------- ruleta ---------- */
+  const stage = $("#stage"), cv = $("#wheel"), ctx = cv.getContext("2d");
+  let S = 0, dpr = 1;
+  function resize(){
+    const r = stage.getBoundingClientRect(); S = r.width; dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(S * dpr); cv.height = Math.round(S * dpr);
+  }
+  new ResizeObserver(resize).observe(stage); resize();
+
+  function mix(a, b, t){
+    const p = h => [1,3,5].map(i => parseInt(h.slice(i, i+2), 16));
+    const A = p(a), B = p(b);
+    return "rgb(" + A.map((v,i) => Math.round(v + (B[i]-v)*t)).join(",") + ")";
+  }
+
+  let rot = 0, spinning = false, sp = null, lastT = 0, lastTick = 0;
+  const FONT = '"Sora", system-ui, -apple-system, sans-serif';
+
+  function draw(t){
+    if (!S) return;
+    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,S,S);
+    const c = S/2, Rb = c - 2, R = c * .885;
+
+    // bisel con luces
+    ctx.beginPath(); ctx.arc(c,c,Rb,0,TAU); ctx.fillStyle = "#0E1530"; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = "#2A3A72"; ctx.stroke();
+    const L = 32, lr = (Rb - R) / 2 + R, phase = spinning ? Math.floor(t/70) : Math.floor(t/420);
+    for (let k = 0; k < L; k++){
+      const a = k / L * TAU, on = spinning ? (k + phase) % 2 === 0 : (k + phase) % 4 === 0;
+      ctx.beginPath(); ctx.arc(c + Math.cos(a)*lr, c + Math.sin(a)*lr, (Rb-R)*.2, 0, TAU);
+      ctx.fillStyle = on ? (k % 2 ? "#F2B33D" : "#3FD0FF") : "#26325E";
+      if (on){ ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10; }
+      ctx.fill(); ctx.shadowBlur = 0;
+    }
+
+    ctx.save(); ctx.translate(c,c); ctx.rotate(rot);
+    for (let i = 0; i < N; i++){
+      const s = segs[i], a0 = -Math.PI/2 + i*SEG, a1 = a0 + SEG;
+      const g = ctx.createRadialGradient(0,0,R*.15,0,0,R);
+      g.addColorStop(0, mix(s.color, "#070B1A", .55)); g.addColorStop(.75, s.color); g.addColorStop(1, mix(s.color, "#FFFFFF", .12));
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,R,a0,a1); ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+      ctx.lineWidth = Math.max(2, R*.008); ctx.strokeStyle = "rgba(7,11,26,.9)"; ctx.stroke();
+
+      ctx.save(); ctx.rotate(a0 + SEG/2);
+      // emoji, de pie hacia el borde
+      ctx.save(); ctx.translate(R*.83, 0); ctx.rotate(Math.PI/2);
+      ctx.font = Math.round(R*.12) + 'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s.emoji, 0, 0);
+      ctx.restore();
+      // nombre sobre el radio
+      let fs = R * .066; ctx.font = "700 " + fs + "px " + FONT;
+      const right = R * .71, avail = right - R * .27;
+      const mw = Math.max(...s.lines.map(l => ctx.measureText(l).width));
+      if (mw > avail) { fs *= avail / mw; ctx.font = "700 " + fs + "px " + FONT; }
+      ctx.fillStyle = s.text || "#FFFFFF"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      const lh = fs * 1.12, n = s.lines.length;
+      s.lines.forEach((l, j) => ctx.fillText(l, right, (j - (n-1)/2) * lh));
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // brillo superior
+    const sh = ctx.createLinearGradient(0, c - R, 0, c + R);
+    sh.addColorStop(0, "rgba(255,255,255,.14)"); sh.addColorStop(.5, "rgba(255,255,255,0)");
+    ctx.beginPath(); ctx.arc(c,c,R,0,TAU); ctx.fillStyle = sh; ctx.fill();
+    ctx.lineWidth = Math.max(3, R*.012); ctx.strokeStyle = "#3FD0FF"; ctx.stroke();
+  }
+
+  const pointer = $("#pointer");
+  function frame(t){
+    const dt = lastT ? Math.min(.05, (t - lastT) / 1000) : 0; lastT = t;
+    if (spinning){
+      const p = Math.min(1, (t - sp.t0) / sp.dur), e = 1 - Math.pow(1 - p, 4);
+      rot = sp.from + (sp.to - sp.from) * e;
+      const k = Math.floor(rot / SEG);
+      if (k !== lastTick){ lastTick = k; tick(); pointer.classList.add("kick"); requestAnimationFrame(() => pointer.classList.remove("kick")); }
+      if (p >= 1){ spinning = false; land(); }
+    } else if (!reduce && $("#result").hidden){
+      rot = (rot + dt * .14) % TAU;   // giro lento de atracción
+    }
+    draw(t);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw(performance.now()));
+
+  /* ---------- sorteo ---------- */
+  const eligible = s => +s.weight > 0 && !(s.prize && s.stock !== "" && +s.stock <= 0);
+  function pick(){
+    const w = segs.map(s => eligible(s) ? +s.weight : 0), tot = w.reduce((a,b) => a+b, 0);
+    if (!tot) return Math.floor(Math.random() * N);
+    let r = Math.random() * tot;
+    for (let i = 0; i < N; i++){ r -= w[i]; if (r < 0) return i; }
+    return N - 1;
+  }
+
+  const cta = $("#cta"), hub = $("#hub");
+  function spin(){
+    if (spinning || !$("#result").hidden) return;
+    audioOn(); keepAwake();
+    const i = pick();
+    const a = (i + .15 + Math.random() * .7) * SEG;           // punto dentro del segmento ganador
+    const from = rot;
+    const base = from - (((from % TAU) + TAU) % TAU) + TAU * (reduce ? 2 : 6);
+    sp = { i, from, to: base + (TAU - a), t0: performance.now(), dur: reduce ? 2500 : 6500 };
+    lastTick = Math.floor(from / SEG);
+    spinning = true; cta.disabled = true; hub.disabled = true;
+  }
+  cta.addEventListener("click", spin);
+  hub.addEventListener("click", spin);
+
+  let autoClose = null;
+  function land(){
+    const s = segs[sp.i];
+    stats.spins++; stats.wins[s.id] = (stats.wins[s.id] || 0) + 1;
+    if (s.prize){
+      stats.prizes[s.id] = (stats.prizes[s.id] || 0) + 1;
+      if (s.stock !== "") s.stock = String(Math.max(0, +s.stock - 1));
+    }
+    save();
+    setTimeout(() => show(s), 550);
+  }
+  function show(s){
+    const card = $("#card");
+    card.style.setProperty("--seg", s.color);
+    card.classList.toggle("prize", !!s.prize);
+    $("#rEmoji").textContent = s.emoji;
+    $("#rName").textContent = s.name;
+    $("#rDesc").textContent = s.desc;
+    $("#rLbl").textContent = s.prize ? "Premio inmediato" : "Tu reto";
+    $("#rTxt").textContent = s.reward;
+    $("#result").hidden = false;
+    winSound(s.prize);
+    burst(s.prize ? (s.id === "yeti" ? 320 : 200) : 110, s.prize ? ["#F2B33D","#FFE39A","#3FD0FF","#FFFFFF"] : [s.color,"#3FD0FF","#FFFFFF"]);
+    $("#next").focus();
+    clearTimeout(autoClose); autoClose = setTimeout(reset, 90000);
+  }
+  function reset(){
+    clearTimeout(autoClose);
+    $("#result").hidden = true; cta.disabled = false; hub.disabled = false;
+  }
+  $("#next").addEventListener("click", reset);
+
+  /* ---------- confeti ---------- */
+  const cc = $("#confetti"), cx = cc.getContext("2d");
+  let parts = [], confOn = false;
+  function burst(n, colors){
+    if (reduce) return;
+    const W = innerWidth, H = innerHeight, d = Math.min(devicePixelRatio || 1, 2);
+    cc.width = W * d; cc.height = H * d; cx.setTransform(d,0,0,d,0,0);
+    for (let k = 0; k < n; k++){
+      const side = k % 2 ? 1 : -1;
+      parts.push({ x: W/2 + side * W * .32, y: H * .55, vx: -side * (4 + Math.random()*10) + (Math.random()-.5)*6, vy: -(10 + Math.random()*14),
+        s: 7 + Math.random()*9, r: Math.random()*TAU, vr: (Math.random()-.5)*.35, c: colors[k % colors.length] });
+    }
+    if (!confOn){ confOn = true; requestAnimationFrame(cloop); }
+  }
+  function cloop(){
+    const W = innerWidth, H = innerHeight; cx.clearRect(0,0,W,H);
+    parts = parts.filter(p => p.y < H + 40);
+    for (const p of parts){
+      p.vy += .32; p.vx *= .985; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      cx.save(); cx.translate(p.x, p.y); cx.rotate(p.r); cx.fillStyle = p.c;
+      cx.fillRect(-p.s/2, -p.s/4, p.s, p.s/2 * (0.4 + Math.abs(Math.sin(p.r)))); cx.restore();
+    }
+    if (parts.length) requestAnimationFrame(cloop); else { confOn = false; cx.clearRect(0,0,W,H); }
+  }
+
+  /* ---------- panel de staff: 5 toques rápidos al logo ---------- */
+  let taps = 0, tapT = 0;
+  $("#logo").addEventListener("click", () => {
+    const now = Date.now(); taps = now - tapT < 1500 ? taps + 1 : 1; tapT = now;
+    if (taps >= 5){ taps = 0; openAdmin(); }
+  });
+  function esc(t){ return String(t).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch])); }
+  function openAdmin(){
+    $("#aHandles").value = cfg.handles; $("#aQr").value = cfg.qr; $("#aSound").checked = cfg.sound;
+    $("#aRows").innerHTML = segs.map(s => `
+      <tr>
+        <td><b>${s.emoji} ${esc(s.name)}</b></td>
+        <td><input class="w" id="w-${s.id}" type="number" min="0" step="1" inputmode="numeric" value="${esc(s.weight)}"></td>
+        <td class="num-c" id="p-${s.id}"></td>
+        <td><input id="z-${s.id}" type="checkbox" ${s.prize ? "checked" : ""} aria-label="Es premio"></td>
+        <td><input class="s" id="s-${s.id}" type="number" min="0" step="1" inputmode="numeric" placeholder="∞" value="${esc(s.stock)}"></td>
+        <td><textarea id="r-${s.id}">${esc(s.reward)}</textarea></td>
+        <td class="num-c">${stats.wins[s.id] || 0}</td>
+        <td class="num-c">${stats.prizes[s.id] || 0}</td>
+      </tr>`).join("");
+    $("#aRows").querySelectorAll("input,textarea").forEach(el => el.addEventListener("input", readAdmin));
+    renderKpis(); probs();
+    $("#admin").hidden = false;
+  }
+  function readAdmin(){
+    cfg.handles = $("#aHandles").value; cfg.qr = $("#aQr").value.trim(); cfg.sound = $("#aSound").checked;
+    segs.forEach(s => {
+      const w = $("#w-" + s.id); if (!w) return;
+      s.weight = Math.max(0, +w.value || 0);
+      s.prize = $("#z-" + s.id).checked;
+      const st = $("#s-" + s.id).value.trim(); s.stock = st === "" ? "" : String(Math.max(0, Math.floor(+st) || 0));
+      s.reward = $("#r-" + s.id).value;
+    });
+    probs(); save();
+  }
+  function probs(){
+    const w = segs.map(s => eligible(s) ? +s.weight : 0), tot = w.reduce((a,b) => a+b, 0);
+    segs.forEach((s,i) => { const el = $("#p-" + s.id); if (el) el.textContent = tot ? (w[i]/tot*100).toFixed(1) + " %" : "—"; });
+  }
+  function renderKpis(){
+    const pr = Object.values(stats.prizes).reduce((a,b) => a+b, 0);
+    const y = segs.find(s => s.id === "yeti");
+    $("#aKpis").innerHTML =
+      `<div class="kpi"><b>${stats.spins}</b><span>Giros</span></div>` +
+      `<div class="kpi"><b>${pr}</b><span>Premios entregados</span></div>` +
+      `<div class="kpi"><b>${y.stock === "" ? "∞" : y.stock}</b><span>YETI disponibles</span></div>`;
+  }
+  ["#aHandles","#aQr","#aSound"].forEach(id => $(id).addEventListener("input", readAdmin));
+  $("#aSound").addEventListener("change", readAdmin);
+  function closeAdmin(){ readAdmin(); renderInfo(); $("#admin").hidden = true; }
+  $("#aClose").addEventListener("click", closeAdmin);
+  $("#aDone").addEventListener("click", closeAdmin);
+
+  function twoTap(btn, label, fn){
+    let armed = null;
+    btn.addEventListener("click", () => {
+      if (armed){ clearTimeout(armed); armed = null; btn.textContent = label; fn(); return; }
+      btn.textContent = "Toca otra vez para confirmar";
+      armed = setTimeout(() => { armed = null; btn.textContent = label; }, 3000);
+    });
+  }
+  twoTap($("#aResetStats"), "Reiniciar contadores", () => { stats = { spins:0, wins:{}, prizes:{} }; save(); openAdmin(); });
+  twoTap($("#aDefaults"), "Restaurar valores originales", () => { fresh(); save(); renderInfo(); openAdmin(); });
+
+  // evitar zoom accidental en iPad
+  document.addEventListener("gesturestart", e => e.preventDefault());
+  document.addEventListener("dblclick", e => e.preventDefault());
+})();
+</script>
+<script>if("serviceWorker" in navigator){addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}</script>
+</body>
+</html>
